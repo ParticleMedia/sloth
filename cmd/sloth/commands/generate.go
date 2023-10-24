@@ -39,6 +39,7 @@ type generateCommand struct {
 	sliPluginsPaths       []string
 	sloPeriodWindowsPath  string
 	sloPeriod             string
+	sourceTenants         []string
 }
 
 // NewGenerateCommand returns the generate command.
@@ -57,6 +58,7 @@ func NewGenerateCommand(app *kingpin.Application) Command {
 	cmd.Flag("slo-period-windows-path", "The directory path to custom SLO period windows catalog (replaces default ones).").StringVar(&c.sloPeriodWindowsPath)
 	cmd.Flag("default-slo-period", "The default SLO period windows to be used for the SLOs.").Default("30d").StringVar(&c.sloPeriod)
 	cmd.Flag("disable-optimized-rules", "If enabled it will disable optimized generated rules.").BoolVar(&c.disableOptimizedRules)
+	cmd.Flag("source-tenants", "Source tenants to add.").StringsVar(&c.sourceTenants)
 
 	return c
 }
@@ -245,6 +247,7 @@ func (g generateCommand) Run(ctx context.Context, config RootConfig) error {
 		disableAlerts:         g.disableAlerts,
 		disableOptimizedRules: g.disableOptimizedRules,
 		extraLabels:           g.extraLabels,
+		sourceTenants:          g.sourceTenants,
 	}
 
 	for _, genTarget := range genTargets {
@@ -305,6 +308,7 @@ type generator struct {
 	disableAlerts         bool
 	disableOptimizedRules bool
 	extraLabels           map[string]string
+	sourceTenants          []string
 }
 
 // GeneratePrometheus generates the SLOs based on a raw regular Prometheus spec format input and outs a Prometheus raw yaml.
@@ -330,7 +334,7 @@ func (g generator) GeneratePrometheus(ctx context.Context, slos prometheus.SLOGr
 		})
 	}
 
-	err = repo.StoreSLOs(ctx, storageSLOs)
+	err = repo.StoreSLOs(ctx, storageSLOs, g.sourceTenants)
 	if err != nil {
 		return fmt.Errorf("could not store SLOS: %w", err)
 	}
@@ -392,7 +396,7 @@ func (g generator) GenerateOpenSLO(ctx context.Context, slos prometheus.SLOGroup
 		})
 	}
 
-	err = repo.StoreSLOs(ctx, storageSLOs)
+	err = repo.StoreSLOs(ctx, storageSLOs, g.sourceTenants)
 	if err != nil {
 		return fmt.Errorf("could not store SLOS: %w", err)
 	}

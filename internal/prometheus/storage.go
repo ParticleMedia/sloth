@@ -41,7 +41,7 @@ type StorageSLO struct {
 // StoreSLOs will store the recording and alert prometheus rules, if grouped is false it will
 // split and store as 2 different groups the alerts and the recordings, if true
 // it will be save as a single group.
-func (i IOWriterGroupedRulesYAMLRepo) StoreSLOs(ctx context.Context, slos []StorageSLO) error {
+func (i IOWriterGroupedRulesYAMLRepo) StoreSLOs(ctx context.Context, slos []StorageSLO, sourceTenants []string) error {
 	if len(slos) == 0 {
 		return fmt.Errorf("slo rules required")
 	}
@@ -50,22 +50,25 @@ func (i IOWriterGroupedRulesYAMLRepo) StoreSLOs(ctx context.Context, slos []Stor
 	for _, slo := range slos {
 		if len(slo.Rules.SLIErrorRecRules) > 0 {
 			ruleGroups.Groups = append(ruleGroups.Groups, ruleGroupYAMLv2{
-				Name:  fmt.Sprintf("sloth-slo-sli-recordings-%s", slo.SLO.ID),
-				Rules: slo.Rules.SLIErrorRecRules,
+				Name:          fmt.Sprintf("sloth-slo-sli-recordings-%s", slo.SLO.ID),
+				Rules:         slo.Rules.SLIErrorRecRules,
+				SourceTenants: sourceTenants,
 			})
 		}
 
 		if len(slo.Rules.MetadataRecRules) > 0 {
 			ruleGroups.Groups = append(ruleGroups.Groups, ruleGroupYAMLv2{
-				Name:  fmt.Sprintf("sloth-slo-meta-recordings-%s", slo.SLO.ID),
-				Rules: slo.Rules.MetadataRecRules,
+				Name:          fmt.Sprintf("sloth-slo-meta-recordings-%s", slo.SLO.ID),
+				Rules:         slo.Rules.MetadataRecRules,
+				SourceTenants: sourceTenants,
 			})
 		}
 
 		if len(slo.Rules.AlertRules) > 0 {
 			ruleGroups.Groups = append(ruleGroups.Groups, ruleGroupYAMLv2{
-				Name:  fmt.Sprintf("sloth-slo-alerts-%s", slo.SLO.ID),
-				Rules: slo.Rules.AlertRules,
+				Name:          fmt.Sprintf("sloth-slo-alerts-%s", slo.SLO.ID),
+				Rules:         slo.Rules.AlertRules,
+				SourceTenants: sourceTenants,
 			})
 		}
 	}
@@ -112,7 +115,8 @@ type ruleGroupsYAMLv2 struct {
 }
 
 type ruleGroupYAMLv2 struct {
-	Name     string             `yaml:"name"`
-	Interval prommodel.Duration `yaml:"interval,omitempty"`
-	Rules    []rulefmt.Rule     `yaml:"rules"`
+	Name          string             `yaml:"name"`
+	Interval      prommodel.Duration `yaml:"interval,omitempty"`
+	Rules         []rulefmt.Rule     `yaml:"rules"`
+	SourceTenants []string           `yaml:"source_tenants"`
 }
