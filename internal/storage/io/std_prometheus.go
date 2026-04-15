@@ -19,18 +19,20 @@ var (
 	ErrNoSLORules = fmt.Errorf("0 SLO Prometheus rules generated")
 )
 
-func NewStdPrometheusGroupedRulesYAMLRepo(writer io.Writer, logger log.Logger) StdPrometheusGroupedRulesYAMLRepo {
+func NewStdPrometheusGroupedRulesYAMLRepo(writer io.Writer, logger log.Logger, sourceTenants []string) StdPrometheusGroupedRulesYAMLRepo {
 	return StdPrometheusGroupedRulesYAMLRepo{
-		writer: writer,
-		logger: logger.WithValues(log.Kv{"svc": "storageio.StdPrometheusGroupedRulesYAMLRepo"}),
+		writer:        writer,
+		logger:        logger.WithValues(log.Kv{"svc": "storageio.StdPrometheusGroupedRulesYAMLRepo"}),
+		sourceTenants: sourceTenants,
 	}
 }
 
 // StdPrometheusGroupedRulesYAMLRepo knows to store all the SLO rules (recordings and alerts)
 // grouped in an IOWriter in YAML format, that is compatible with Prometheus.
 type StdPrometheusGroupedRulesYAMLRepo struct {
-	writer io.Writer
-	logger log.Logger
+	writer        io.Writer
+	logger        log.Logger
+	sourceTenants []string
 }
 
 type StdPrometheusStorageSLO struct {
@@ -50,25 +52,28 @@ func (r StdPrometheusGroupedRulesYAMLRepo) StoreSLOs(ctx context.Context, slos m
 	for _, slo := range slos.SLOResults {
 		if len(slo.PrometheusRules.SLIErrorRecRules.Rules) > 0 {
 			ruleGroups.Groups = append(ruleGroups.Groups, stdPromRuleGroupYAMLv2{
-				Interval: prommodel.Duration(slo.PrometheusRules.SLIErrorRecRules.Interval),
-				Name:     slo.PrometheusRules.SLIErrorRecRules.Name,
-				Rules:    slo.PrometheusRules.SLIErrorRecRules.Rules,
+				Interval:      prommodel.Duration(slo.PrometheusRules.SLIErrorRecRules.Interval),
+				Name:          slo.PrometheusRules.SLIErrorRecRules.Name,
+				Rules:         slo.PrometheusRules.SLIErrorRecRules.Rules,
+				SourceTenants: r.sourceTenants,
 			})
 		}
 
 		if len(slo.PrometheusRules.MetadataRecRules.Rules) > 0 {
 			ruleGroups.Groups = append(ruleGroups.Groups, stdPromRuleGroupYAMLv2{
-				Interval: prommodel.Duration(slo.PrometheusRules.MetadataRecRules.Interval),
-				Name:     slo.PrometheusRules.MetadataRecRules.Name,
-				Rules:    slo.PrometheusRules.MetadataRecRules.Rules,
+				Interval:      prommodel.Duration(slo.PrometheusRules.MetadataRecRules.Interval),
+				Name:          slo.PrometheusRules.MetadataRecRules.Name,
+				Rules:         slo.PrometheusRules.MetadataRecRules.Rules,
+				SourceTenants: r.sourceTenants,
 			})
 		}
 
 		if len(slo.PrometheusRules.AlertRules.Rules) > 0 {
 			ruleGroups.Groups = append(ruleGroups.Groups, stdPromRuleGroupYAMLv2{
-				Interval: prommodel.Duration(slo.PrometheusRules.AlertRules.Interval),
-				Name:     slo.PrometheusRules.AlertRules.Name,
-				Rules:    slo.PrometheusRules.AlertRules.Rules,
+				Interval:      prommodel.Duration(slo.PrometheusRules.AlertRules.Interval),
+				Name:          slo.PrometheusRules.AlertRules.Name,
+				Rules:         slo.PrometheusRules.AlertRules.Rules,
+				SourceTenants: r.sourceTenants,
 			})
 		}
 
@@ -79,9 +84,10 @@ func (r StdPrometheusGroupedRulesYAMLRepo) StoreSLOs(ctx context.Context, slos m
 			}
 
 			ruleGroups.Groups = append(ruleGroups.Groups, stdPromRuleGroupYAMLv2{
-				Interval: prommodel.Duration(extraRuleGroup.Interval),
-				Name:     extraRuleGroup.Name,
-				Rules:    extraRuleGroup.Rules,
+				Interval:      prommodel.Duration(extraRuleGroup.Interval),
+				Name:          extraRuleGroup.Name,
+				Rules:         extraRuleGroup.Rules,
+				SourceTenants: r.sourceTenants,
 			})
 		}
 	}
@@ -114,7 +120,8 @@ type stdPromRuleGroupsYAMLv2 struct {
 }
 
 type stdPromRuleGroupYAMLv2 struct {
-	Name     string             `yaml:"name"`
-	Interval prommodel.Duration `yaml:"interval,omitempty"`
-	Rules    []rulefmt.Rule     `yaml:"rules"`
+	Name          string             `yaml:"name"`
+	Interval      prommodel.Duration `yaml:"interval,omitempty"`
+	Rules         []rulefmt.Rule     `yaml:"rules"`
+	SourceTenants []string           `yaml:"source_tenants,omitempty"`
 }

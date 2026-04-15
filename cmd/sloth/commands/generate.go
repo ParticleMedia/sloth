@@ -37,6 +37,7 @@ type generateCommand struct {
 	sloPlugins               []string
 	disableDefaultSLOPlugins bool
 	k8sTransformPluginID     string
+	sourceTenants            []string
 }
 
 // NewGenerateCommand returns the generate command.
@@ -57,6 +58,7 @@ func NewGenerateCommand(app *kingpin.Application) Command {
 	cmd.Flag("slo-plugins", `SLO plugins chain declaration in JSON format '{"id": "foo","priority": 0,"config": "{}"}' (Can be repeated).`).Short('s').StringsVar(&c.sloPlugins)
 	cmd.Flag("disable-default-slo-plugins", `Disables the default SLO plugins, normally used along with custom SLO plugins to fully customize Sloth behavior`).BoolVar(&c.disableDefaultSLOPlugins)
 	cmd.Flag("k8s-transform-plugin-id", "The ID of the plugin that will transform generated SLOs into k8s objects.").Default(k8stransformpromopv1.PluginID).StringVar(&c.k8sTransformPluginID)
+	cmd.Flag("source-tenants", "Source tenants to add to generated rule groups (can be repeated).").StringsVar(&c.sourceTenants)
 
 	return c
 }
@@ -275,7 +277,7 @@ func (g generateCommand) storeSLOs(ctx context.Context, logger log.Logger, gener
 	switch {
 	// Standard prometheus.
 	case genResult.OriginalSource.SlothV1 != nil:
-		return generator.WriteResultAsPrometheusStd(ctx, genResult, out)
+		return generator.WriteResultAsPrometheusStd(ctx, genResult, g.sourceTenants, out)
 
 	// K8s Sloth CR.
 	case genResult.OriginalSource.K8sSlothV1 != nil:
@@ -290,7 +292,7 @@ func (g generateCommand) storeSLOs(ctx context.Context, logger log.Logger, gener
 
 	// OpenSLO.
 	case genResult.OriginalSource.OpenSLOV1Alpha != nil:
-		return generator.WriteResultAsPrometheusStd(ctx, genResult, out)
+		return generator.WriteResultAsPrometheusStd(ctx, genResult, g.sourceTenants, out)
 
 	default:
 		return fmt.Errorf("invalid spec, could not load with any of the supported spec types")

@@ -340,7 +340,7 @@ groups:
 			assert := assert.New(t)
 
 			var gotYAML bytes.Buffer
-			repo := io.NewStdPrometheusGroupedRulesYAMLRepo(&gotYAML, log.Noop)
+			repo := io.NewStdPrometheusGroupedRulesYAMLRepo(&gotYAML, log.Noop, nil)
 			err := repo.StoreSLOs(context.TODO(), test.slos)
 
 			if test.expErr {
