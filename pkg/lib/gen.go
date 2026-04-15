@@ -305,8 +305,8 @@ func (p PrometheusSLOGenerator) generateFromModel(ctx context.Context, req gener
 // More information in:
 //   - https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/#recording-rules.
 //   - https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/.
-func (p PrometheusSLOGenerator) WriteResultAsPrometheusStd(ctx context.Context, slo model.PromSLOGroupResult, sourceTenants []string, w io.Writer) error {
-	repo := storageio.NewStdPrometheusGroupedRulesYAMLRepo(w, p.logger, sourceTenants)
+func (p PrometheusSLOGenerator) WriteResultAsPrometheusStd(ctx context.Context, slo model.PromSLOGroupResult, sourceTenants []string, ruleGroupInterval string, w io.Writer) error {
+	repo := storageio.NewStdPrometheusGroupedRulesYAMLRepo(w, p.logger, sourceTenants, ruleGroupInterval)
 	return repo.StoreSLOs(ctx, slo)
 }
 

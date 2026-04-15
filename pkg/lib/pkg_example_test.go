@@ -36,7 +36,7 @@ func Example() {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		err = gen.WriteResultAsPrometheusStd(r.Context(), *result, nil, w)
+		err = gen.WriteResultAsPrometheusStd(r.Context(), *result, nil, "", w)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("could not write result: %v", err), http.StatusInternalServerError)
 			return

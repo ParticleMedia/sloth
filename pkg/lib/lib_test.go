@@ -63,7 +63,7 @@ slos:
 		panic(err)
 	}
 
-	err = gen.WriteResultAsPrometheusStd(ctx, *slo, nil, os.Stdout)
+	err = gen.WriteResultAsPrometheusStd(ctx, *slo, nil, "", os.Stdout)
 	if err != nil {
 		panic(err)
 	}
@@ -124,7 +124,7 @@ func ExamplePrometheusSLOGenerator_GenerateFromSlothV1() {
 		panic(err)
 	}
 
-	err = gen.WriteResultAsPrometheusStd(ctx, *slo, nil, os.Stdout)
+	err = gen.WriteResultAsPrometheusStd(ctx, *slo, nil, "", os.Stdout)
 	if err != nil {
 		panic(err)
 	}

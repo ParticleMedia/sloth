@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	prommodel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/rulefmt"
@@ -19,25 +20,40 @@ var (
 	ErrNoSLORules = fmt.Errorf("0 SLO Prometheus rules generated")
 )
 
-func NewStdPrometheusGroupedRulesYAMLRepo(writer io.Writer, logger log.Logger, sourceTenants []string) StdPrometheusGroupedRulesYAMLRepo {
+func NewStdPrometheusGroupedRulesYAMLRepo(writer io.Writer, logger log.Logger, sourceTenants []string, ruleGroupInterval string) StdPrometheusGroupedRulesYAMLRepo {
+	var interval time.Duration
+	if ruleGroupInterval != "" {
+		if d, err := prommodel.ParseDuration(ruleGroupInterval); err == nil {
+			interval = time.Duration(d)
+		}
+	}
 	return StdPrometheusGroupedRulesYAMLRepo{
-		writer:        writer,
-		logger:        logger.WithValues(log.Kv{"svc": "storageio.StdPrometheusGroupedRulesYAMLRepo"}),
-		sourceTenants: sourceTenants,
+		writer:            writer,
+		logger:            logger.WithValues(log.Kv{"svc": "storageio.StdPrometheusGroupedRulesYAMLRepo"}),
+		sourceTenants:     sourceTenants,
+		intervalOverride:  interval,
 	}
 }
 
 // StdPrometheusGroupedRulesYAMLRepo knows to store all the SLO rules (recordings and alerts)
 // grouped in an IOWriter in YAML format, that is compatible with Prometheus.
 type StdPrometheusGroupedRulesYAMLRepo struct {
-	writer        io.Writer
-	logger        log.Logger
-	sourceTenants []string
+	writer           io.Writer
+	logger           log.Logger
+	sourceTenants    []string
+	intervalOverride time.Duration
 }
 
 type StdPrometheusStorageSLO struct {
 	SLO   model.PromSLO
 	Rules model.PromSLORules
+}
+
+func (r StdPrometheusGroupedRulesYAMLRepo) resolveInterval(original time.Duration) prommodel.Duration {
+	if r.intervalOverride > 0 {
+		return prommodel.Duration(r.intervalOverride)
+	}
+	return prommodel.Duration(original)
 }
 
 // StoreSLOs will store the recording and alert prometheus rules, if grouped is false it will
@@ -52,7 +68,7 @@ func (r StdPrometheusGroupedRulesYAMLRepo) StoreSLOs(ctx context.Context, slos m
 	for _, slo := range slos.SLOResults {
 		if len(slo.PrometheusRules.SLIErrorRecRules.Rules) > 0 {
 			ruleGroups.Groups = append(ruleGroups.Groups, stdPromRuleGroupYAMLv2{
-				Interval:      prommodel.Duration(slo.PrometheusRules.SLIErrorRecRules.Interval),
+				Interval:      r.resolveInterval(slo.PrometheusRules.SLIErrorRecRules.Interval),
 				Name:          slo.PrometheusRules.SLIErrorRecRules.Name,
 				Rules:         slo.PrometheusRules.SLIErrorRecRules.Rules,
 				SourceTenants: r.sourceTenants,
@@ -61,7 +77,7 @@ func (r StdPrometheusGroupedRulesYAMLRepo) StoreSLOs(ctx context.Context, slos m
 
 		if len(slo.PrometheusRules.MetadataRecRules.Rules) > 0 {
 			ruleGroups.Groups = append(ruleGroups.Groups, stdPromRuleGroupYAMLv2{
-				Interval:      prommodel.Duration(slo.PrometheusRules.MetadataRecRules.Interval),
+				Interval:      r.resolveInterval(slo.PrometheusRules.MetadataRecRules.Interval),
 				Name:          slo.PrometheusRules.MetadataRecRules.Name,
 				Rules:         slo.PrometheusRules.MetadataRecRules.Rules,
 				SourceTenants: r.sourceTenants,
@@ -70,7 +86,7 @@ func (r StdPrometheusGroupedRulesYAMLRepo) StoreSLOs(ctx context.Context, slos m
 
 		if len(slo.PrometheusRules.AlertRules.Rules) > 0 {
 			ruleGroups.Groups = append(ruleGroups.Groups, stdPromRuleGroupYAMLv2{
-				Interval:      prommodel.Duration(slo.PrometheusRules.AlertRules.Interval),
+				Interval:      r.resolveInterval(slo.PrometheusRules.AlertRules.Interval),
 				Name:          slo.PrometheusRules.AlertRules.Name,
 				Rules:         slo.PrometheusRules.AlertRules.Rules,
 				SourceTenants: r.sourceTenants,
@@ -84,7 +100,7 @@ func (r StdPrometheusGroupedRulesYAMLRepo) StoreSLOs(ctx context.Context, slos m
 			}
 
 			ruleGroups.Groups = append(ruleGroups.Groups, stdPromRuleGroupYAMLv2{
-				Interval:      prommodel.Duration(extraRuleGroup.Interval),
+				Interval:      r.resolveInterval(extraRuleGroup.Interval),
 				Name:          extraRuleGroup.Name,
 				Rules:         extraRuleGroup.Rules,
 				SourceTenants: r.sourceTenants,
