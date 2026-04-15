@@ -28,10 +28,10 @@ func NewStdPrometheusGroupedRulesYAMLRepo(writer io.Writer, logger log.Logger, s
 		}
 	}
 	return StdPrometheusGroupedRulesYAMLRepo{
-		writer:            writer,
-		logger:            logger.WithValues(log.Kv{"svc": "storageio.StdPrometheusGroupedRulesYAMLRepo"}),
-		sourceTenants:     sourceTenants,
-		intervalOverride:  interval,
+		writer:           writer,
+		logger:           logger.WithValues(log.Kv{"svc": "storageio.StdPrometheusGroupedRulesYAMLRepo"}),
+		sourceTenants:    sourceTenants,
+		intervalOverride: interval,
 	}
 }
 
