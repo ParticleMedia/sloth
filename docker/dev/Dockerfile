@@ -1,11 +1,12 @@
-FROM golang:1.19.3
+FROM golang:1.26
 
-LABEL org.opencontainers.image.source https://github.com/slok/sloth
+LABEL org.opencontainers.image.source=https://github.com/slok/sloth
 
-ARG GOLANGCI_LINT_VERSION="1.50.0"
-ARG MOCKERY_VERSION="2.14.0"
-ARG GOMARKDOC_VERSION="0.4.1"
-ARG HELM_VERSION="3.10.0"
+ARG GOLANGCI_LINT_VERSION="2.11.4"
+ARG MOCKERY_VERSION="3.7.0"
+ARG GOMARKDOC_VERSION="1.1.0"
+ARG HELM_VERSION="4.1.3"
+ARG YAEGI_VERSION="0.16.1"
 ARG ostype=Linux
 
 RUN apt-get update && apt-get install -y \
@@ -31,7 +32,12 @@ RUN wget https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI
     wget https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz && \
     tar zxvf helm-v${HELM_VERSION}-linux-amd64.tar.gz -C /tmp && \
     mv /tmp/linux-amd64/helm /usr/local/bin/ && \
-    rm -rf helm-v${HELM_VERSION}-linux-amd64.tar.gz /tmp/linux-amd64
+    rm -rf helm-v${HELM_VERSION}-linux-amd64.tar.gz /tmp/linux-amd64 && \
+    \
+    wget https://github.com/traefik/yaegi/releases/download/v${YAEGI_VERSION}/yaegi_v${YAEGI_VERSION}_linux_amd64.tar.gz && \
+    tar zxvf yaegi_v${YAEGI_VERSION}_linux_amd64.tar.gz -C /tmp && \
+    mv /tmp/yaegi /usr/local/bin/ && \
+    rm yaegi_v${YAEGI_VERSION}_linux_amd64.tar.gz
 
 
 # Create user.

@@ -8,12 +8,17 @@ func defaultValues() msi {
 
 func customValues() msi {
 	return msi{
+		"global": msi{
+			"imageRegistry": "",
+		},
+
 		"labels": msi{
 			"label-from": "test",
 		},
 
 		"image": msi{
-			"repository": "slok/sloth-test",
+			"registry":   "slok",
+			"repository": "sloth-test",
 			"tag":        "v1.42.42",
 		},
 
@@ -22,11 +27,15 @@ func customValues() msi {
 			"workers":        99,
 			"labelSelector":  `x=y,z!=y`,
 			"namespace":      "somens",
-			"optimizedRules": false,
 			"extraLabels": msi{
 				"k1": "v1",
 				"k2": "v2",
 			},
+		},
+
+		"nodeSelector": msi{
+			"k1": "v1",
+			"k2": "v2",
 		},
 
 		"commonPlugins": msi{

@@ -1,0 +1,23 @@
+
+{{define "app_slo"}}
+<!DOCTYPE html>
+<html lang="en">
+{{template "shared_head" .}}
+
+<body>
+{{template "shared_nav" .}}
+<main class="container">
+<h1> <a href="{{.Data.SLOData.ServiceURL}}">{{.Data.SLOData.ServiceID}}</a> / {{.Data.SLOData.Name}}</h1>
+<div>
+{{- range $key, $value := .Data.SLOData.GroupLabels -}}
+    <mark>{{ $key }}: <strong>{{ $value }}</strong></mark>
+    <span> </span>
+{{- end -}}
+</div>
+<br />
+{{template "app_slo_comp_slo_data" .}}
+</main>
+</body>
+{{template "shared_footer" .}}
+</html>
+{{end}}

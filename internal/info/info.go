@@ -1,23 +1,29 @@
 package info
 
+import "runtime/debug"
+
 var (
 	// Version is the version app.
+	Version = ""
+)
+
+func init() {
+	if Version != "" {
+		return
+	}
+
+	// If not set, get the information from the runtime in case Sloth has been used as a library.
+	info, ok := debug.ReadBuildInfo()
+	if ok {
+		// Search for sloth as a library.
+		for _, d := range info.Deps {
+			if d.Path == "github.com/slok/sloth" {
+				Version = d.Version
+				return
+			}
+		}
+	}
+
+	// If still not set, then set to dev.
 	Version = "dev"
-)
-
-type Mode string
-
-const (
-	ModeTest                    = "test"
-	ModeCLIGenPrometheus        = "cli-gen-prom"
-	ModeCLIGenKubernetes        = "cli-gen-k8s"
-	ModeCLIGenOpenSLO           = "cli-gen-openslo"
-	ModeControllerGenKubernetes = "ctrl-gen-k8s"
-)
-
-// Info is the information of the app and request based for SLO generators.
-type Info struct {
-	Version string
-	Mode    Mode
-	Spec    string
 }

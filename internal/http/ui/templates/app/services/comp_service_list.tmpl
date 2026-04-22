@@ -1,0 +1,88 @@
+{{define "app_services_comp_service_list"}}
+
+<div id="services-list">
+
+{{ if not .Data.Services }}
+    <p>No services found.</p>
+{{ else }}
+    <table>
+    <thead>
+        <tr>
+        <th scope="col">
+            <div
+                hx-get="{{ .Data.SortServiceNameURL }}"
+                hx-target="#services-list"
+                hx-swap="innerHTML show:window:top">
+            Service {{.Data.SortServiceTitleIcon}}</div>
+        </th>
+        <th scope="col">
+            Total SLOs
+        </th>
+
+        <th scope="col">
+            SLOs burning over budget
+        </th>
+        <th scope="col">
+            <div
+                hx-get="{{ .Data.SortStatusURL }}"
+                hx-target="#services-list"
+                hx-swap="innerHTML show:window:top">
+            Status {{.Data.SortStatusTitleIcon}}</div>
+        </th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Data.Services}}
+        <tr>
+        <td><a href="{{.DetailsURL}}">{{.Name}}</a></td>
+        <td>{{.TotalSLOs}}</td>
+        <td>
+                <span>{{.SLOsCurrentlyBurningOverBudget}}</span>
+                <span class="percent-badge {{percentColorCSSClassCustom .SLOsCurrentlyBurningOverBudgetPercent 2 30}}">{{prettyPercent .SLOsCurrentlyBurningOverBudgetPercent}}</span>
+        </td>
+        <td>
+        {{ if .HasCritical }}
+            <div class="is-critical"> <i data-lucide="triangle-alert"></i> Firing {{.TotalAlertsFiring}} alerts</div>
+        {{ else if .HasWarning }}
+            <div class="is-warning"> <i data-lucide="triangle-alert"></i> Firing {{.TotalAlertsFiring}} alerts</div>
+        {{ else }}
+            <div class="is-ok"> <i data-lucide="circle-check"></i> No alerts firing</div>
+        {{ end }}
+        </td>
+        </tr>
+        {{end}}
+    </tbody>
+     <tfoot>
+        <tr>
+            <td colspan="6">
+                <div class="pagination grid">
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <a {{ if not .Data.ServicePagination.HasPrevious }}aria-disabled="true"{{ end }}
+                       href="{{ .Data.ServicePagination.PrevURL }}"
+                       hx-get="{{ .Data.ServicePagination.PrevURL }}"
+                       hx-target="#services-list"
+                       hx-swap="innerHTML show:window:top">
+                    << Previous
+                    </a>
+                    <a {{ if not .Data.ServicePagination.HasNext }}aria-disabled="true"{{ end }}
+                       href="{{ .Data.ServicePagination.NextURL }}"
+                       hx-get="{{ .Data.ServicePagination.NextURL }}"
+                       hx-target="#services-list"
+                       hx-swap="innerHTML show:window:top">
+                    Next >>
+                    </a>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                </div>
+            </td>
+        </tr>
+    </tfoot>
+    </table>
+{{ end }}
+</div>
+{{ end }}

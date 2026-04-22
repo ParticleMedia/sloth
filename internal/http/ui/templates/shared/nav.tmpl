@@ -1,0 +1,16 @@
+{{define "shared_nav"}}
+<div class="container">
+<nav>
+  <ul id="logo">
+    <li style="color: var(--pico-primary)">{{slothLogoSVG "" 25}}</li>
+    <li><a style="color: var(--pico-primary); font-size: 1.5rem;font-weight: bold;" href="/">
+      Sloth
+    </a></li>
+  </ul>
+  <ul>
+    <li><a href="{{.Common.ServicesURL}}">Services</a></li>
+    <li><a href="{{.Common.SLOsURL}}">SLOs</a></li>
+  </ul>
+</nav>
+</div>
+{{end}}

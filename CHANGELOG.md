@@ -2,6 +2,116 @@
 
 ## [Unreleased]
 
+## [v0.16.0] - 2026-04-04
+
+### Added
+
+- K8s transformer plugins to be able to customize the k8s resulting objects without depending on current Prometheys operator Rule CR.
+- `sloth.dev/k8stransform/prom-operator-prometheus-rule/v1` K8s transformer plugin.
+- Users can now create multiple K8s objects as the output of the SLO generated rules.
+- Sloth lib support for K8s transformer plugins using `WriteResultAsK8sObjects`.
+- New `server` command that serves the new UI.
+- UI: Service listing and searching.
+- UI: SLO listing, searching and filtered by service.
+- UI: SLO details with stats, alerts state, SLI chart and budged burn in period chart.
+- UI: Support SLO grouped by labels.
+- UI: Redirect unmarshaled ID of grouped SLO labels to proper SLO ID.
+- UI: Support service list sort by name and alert status.
+- UI: Support alert firing, burning over budget and budget consumed in period SLO filtering on SLO listing.
+- Update to Kubernetes v1.35.
+- `validate` command will check for SLO duplicates (disable with `--ignore-slo-duplicates`).
+
+### Changed
+
+- Sloth now uses a dynamic `unstructured` plugin (`sloth.dev/k8stransform/prom-operator-prometheus-rule/v1`) to create and manage the prometheus operator Rule K8s CRs.
+- BREAKING: Plugin loader will ignore directories starting with `..`.
+
+## [v0.15.0] - 2025-10-31
+
+### Added
+
+- Sloth SLO generation can be used as a Go library in `github.com/slok/sloth/pkg/lib`.
+- Sloth lib `PrometheusSLOGenerator` with `GenerateFromSlothV1` to generate SLOs based on Sloth v1 spec.
+- Sloth lib `PrometheusSLOGenerator` with `GenerateFromK8sV1` to generate SLOs based on Kubernetes Sloth v1 spec.
+- Sloth lib `PrometheusSLOGenerator` with `GenerateFromOpenSLOV1Alpha` to generate SLOs based on OpenSLO v1Alpha spec.
+- Sloth lib `PrometheusSLOGenerator` with `GenerateFromRaw` to generate SLOs based on any raw string spec.
+- Sloth lib `WriteResultAsPrometheusStd` helper method to write generated SLO results into standard Prometheus rules YAML.
+- Sloth lib `WriteResultAsK8sPrometheusOperator` helper method to write generated SLO results into Prometheus operator rules YAML.
+- The resulting SLO Prometheus rule group name can be customized by SLO plugins.
+- SLO plugins have the ability to add extra Prometheus Rule groups.
+
+### Changed
+
+- The CLI commands `generate` and `validate` use the public Sloth Go library.
+
+## [v0.14.0] - 2025-10-13
+
+### Added
+
+- Add contrib plugin directory and CODEOWNERS policies.
+- Contrib plugin: `/internal/plugin/slo/contrib/info_labels_v1/`.
+- Allow `github.com/VictoriaMetrics/metricsql` module in SLO plugins.
+- Contrib plugin: `sloth.dev/contrib/validate_victoria_metrics/v1`.
+- Contrib plugin: `sloth.dev/contrib/rule_intervals/v1`.
+- Contrib plugin: `sloth.dev/contrib/error_budget_exhausted_alert/v1`.
+- Contrib plugin: `sloth.dev/contrib/denominator_corrected_rules/v1`.
+- Add `--slo-plugins` and `-s` flag (`validate`) to be able to declare SLO plugins at cmd level, these plugins will be applied to all SLOs.
+- Add `--disable-default-slo-plugins` flag (`validate`) to be able to disable default Sloth SLO plugins.
+
+
+### Changed
+
+- Update chat git sync to v4.5.0
+
+## [v0.13.0] - 2025-09-10
+
+### Changed
+
+- Split image registry and repository in Helm chart
+- (BREAKING) Internally Sloth (not k8s) prometheusServiceLevel uses k8s `k8s.io/apimachinery/pkg/util/yaml` lib for unmarshaling YAML instead of `gopkg.in/yaml.v2`.
+- Core SLO validation and SLO rules generation migrated to SLO plugins.
+- (BREAKING) `--sli-plugins-path`, `--slo-plugins-path`, `-m` args and it's env vars `SLOTH_SLI_PLUGINS_PATH`and  `SLOTH_SLO_PLUGINS_PATH` have been removed in favor or `--plugins-path`, `-p` and it's env var `SLOTH_PLUGINS_PATH` that discovers and loads SLI and SLO plugins with a single flag.
+- Simplify validation and improve validation message by using custom logic instead of `go-playground/validator`.
+- (BREAKING) `--disable-optimized-rules` flag and associated env var has been removed.
+- (BREAKING) Helm chart has removed the option for disabling optimized rules.
+- Update to Kubernetes v1.34.
+- Update to Go v1.25.
+
+### Added
+
+- Sloth domain models can be imported in Go apps using `github.com/slok/sloth/pkg/common/model`.
+- Sloth conventions can be imported in Go apps using `github.com/slok/sloth/pkg/common/conventions`.
+- Sloth SLO validation logic can be imported in Go apps using `github.com/slok/sloth/pkg/common/validation`.
+- A new SLO rule generation plugin system has been added to be able to change/extend the SLO rule generation process.
+- SLO plugins can be loaded from FS directories recursively using `--plugins-path` in the commands.
+- SLO plugins have a `priority` value to be able to order in the execution chain.
+- Sloth regular (non-k8s) `prometheus/v1` API support for SLO plugins at SLO group level and per SLO level.
+- Sloth K8s CRD `sloth.slok.dev/v1/PrometheusServiceLevel` API support for SLO plugins at SLO group level and per SLO level.
+- Allow overriding previous declared SLO plugins (includes defaults) at SLO group and SLO level.
+- SLO plugins can access env vars and use OS/exec by default.
+- Allow `github.com/caarlos0/env/v11` module in SLO plugins.
+- Add `--slo-plugins` and `-s` flag (`generate` and `k8s controller`) to be able to declare SLO plugins at cmd level, these plugins will be applied to all SLOs.
+- Add `--disable-default-slo-plugins` flag (`generate` and `k8s controller`) to be able to disable default Sloth SLO plugins.
+- Helm chart supports node selector.
+
+## [v0.12.0] - 2025-03-27
+
+## Added
+
+- Add `ApplyConfig` utils for Kubernetes lib clients.
+
+### Changed
+
+- Update to Go 1.24.
+- Update to Kubernetes v1.32.
+- Update all other dependencies to latest versions.
+- Migrate deployment manifests `git-sync` to v4.
+
+### Fixes
+
+- Allow spec files with CRLF.
+- Helm chart tolerations
+
 ## [v0.11.0] - 2022-10-22
 
 ### Changed
@@ -162,7 +272,12 @@
 - Support raw query based SLI.
 - Kubernetes (prometheus-operator) CRD generation support.
 
-[unreleased]: https://github.com/slok/sloth/compare/v0.11.0...HEAD
+[unreleased]: https://github.com/slok/sloth/compare/v0.16.0...HEAD
+[v0.16.0]: https://github.com/slok/sloth/compare/v0.15.0...v0.16.0
+[v0.15.0]: https://github.com/slok/sloth/compare/v0.14.0...v0.15.0
+[v0.14.0]: https://github.com/slok/sloth/compare/v0.13.0...v0.14.0
+[v0.13.0]: https://github.com/slok/sloth/compare/v0.12.0...v0.13.0
+[v0.12.0]: https://github.com/slok/sloth/compare/v0.11.0...v0.12.0
 [v0.11.0]: https://github.com/slok/sloth/compare/v0.10.0...v0.11.0
 [v0.10.0]: https://github.com/slok/sloth/compare/v0.9.0...v0.10.0
 [v0.9.0]: https://github.com/slok/sloth/compare/v0.8.0...v0.9.0

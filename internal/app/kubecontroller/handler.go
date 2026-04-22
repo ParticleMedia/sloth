@@ -10,14 +10,15 @@ import (
 
 	"github.com/slok/sloth/internal/app/generate"
 	"github.com/slok/sloth/internal/info"
-	"github.com/slok/sloth/internal/k8sprometheus"
 	"github.com/slok/sloth/internal/log"
+	commonmodel "github.com/slok/sloth/pkg/common/model"
+
 	slothv1 "github.com/slok/sloth/pkg/kubernetes/api/sloth/v1"
 )
 
 // SpecLoader Knows how to load a Kubernetes Spec into an app model.
 type SpecLoader interface {
-	LoadSpec(ctx context.Context, spec *slothv1.PrometheusServiceLevel) (*k8sprometheus.SLOGroup, error)
+	LoadSpec(ctx context.Context, spec *slothv1.PrometheusServiceLevel) (*commonmodel.PromSLOGroup, error)
 }
 
 // Generator Knows how to generate SLO prometheus rules from app SLO model.
@@ -27,7 +28,7 @@ type Generator interface {
 
 // Repository knows how to store generated SLO Prometheus rules.
 type Repository interface {
-	StoreSLOs(ctx context.Context, kmeta k8sprometheus.K8sMeta, slos []k8sprometheus.StorageSLO) error
+	StoreSLOs(ctx context.Context, kmeta commonmodel.K8sMeta, slos commonmodel.PromSLOGroupResult) error
 }
 
 // KubeStatusStorer knows how to set the status of Prometheus service levels Kubernetes CRD.
@@ -146,13 +147,13 @@ func (h handler) handlePrometheusServiceLevelV1(ctx context.Context, psl *slothv
 
 	// Generate rules.
 	req := generate.Request{
-		Info: info.Info{
+		Info: commonmodel.Info{
 			Version: info.Version,
-			Mode:    info.ModeControllerGenKubernetes,
+			Mode:    commonmodel.ModeControllerGenKubernetes,
 			Spec:    fmt.Sprintf("%s/%s", slothv1.SchemeGroupVersion.Group, slothv1.SchemeGroupVersion.Version),
 		},
 		ExtraLabels: h.extraLabels,
-		SLOGroup:    model.SLOGroup,
+		SLOGroup:    *model,
 	}
 	resp, err := h.generator.Generate(ctx, req)
 	if err != nil {
@@ -160,14 +161,24 @@ func (h handler) handlePrometheusServiceLevelV1(ctx context.Context, psl *slothv
 	}
 
 	// Store on k8s as Prometheus operator Rules.
-	storageSLOs := make([]k8sprometheus.StorageSLO, 0, len(resp.PrometheusSLOs))
+	sloResult := commonmodel.PromSLOGroupResult{
+		OriginalSource: model.OriginalSource,
+	}
 	for _, s := range resp.PrometheusSLOs {
-		storageSLOs = append(storageSLOs, k8sprometheus.StorageSLO{
-			SLO:   s.SLO,
-			Rules: s.SLORules,
+		sloResult.SLOResults = append(sloResult.SLOResults, commonmodel.PromSLOResult{
+			SLO:             s.SLO,
+			PrometheusRules: s.SLORules,
 		})
 	}
-	err = h.repository.StoreSLOs(ctx, model.K8sMeta, storageSLOs)
+
+	kmeta := commonmodel.K8sMeta{
+		Name:        model.OriginalSource.K8sSlothV1.Name,
+		Namespace:   model.OriginalSource.K8sSlothV1.Namespace,
+		Labels:      model.OriginalSource.K8sSlothV1.Labels,
+		Annotations: model.OriginalSource.K8sSlothV1.Annotations,
+	}
+
+	err = h.repository.StoreSLOs(ctx, kmeta, sloResult)
 	if err != nil {
 		return fmt.Errorf("could not store SLOs: %w", err)
 	}

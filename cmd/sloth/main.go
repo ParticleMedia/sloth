@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/slok/sloth/cmd/sloth/commands"
 	"github.com/slok/sloth/internal/info"
@@ -24,12 +24,14 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	// Setup commands (registers flags).
 	generateCmd := commands.NewGenerateCommand(app)
 	kubeCtrlCmd := commands.NewKubeControllerCommand(app)
+	serverCmd := commands.NewServerCommand(app)
 	validateCmd := commands.NewValidateCommand(app)
 	versionCmd := commands.NewVersionCommand(app)
 
 	cmds := map[string]commands.Command{
 		generateCmd.Name(): generateCmd,
 		kubeCtrlCmd.Name(): kubeCtrlCmd,
+		serverCmd.Name():   serverCmd,
 		validateCmd.Name(): validateCmd,
 		versionCmd.Name():  versionCmd,
 	}

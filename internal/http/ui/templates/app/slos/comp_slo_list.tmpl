@@ -1,0 +1,137 @@
+{{define "app_slos_comp_slo_list"}}
+
+<div id="slo-list">
+
+{{ if not .Data.SLOs }}
+    <p>No slos found.</p>
+{{ else }}
+    <table>
+    <thead>
+        <tr>
+        <th scope="col">
+            Type
+        </th>
+        <th scope="col">
+            <div
+                hx-get="{{ .Data.SortSLONameURL }}"
+                hx-target="#slo-list"
+                hx-swap="innerHTML show:window:top">
+            SLO {{.Data.SortSLONameTitleIcon}}</div>
+        </th>
+        <th scope="col">
+            Grouped labels
+        </th>
+        {{ if not .Data.FilterServiceID }}
+        <th scope="col">
+            <div
+                hx-get="{{ .Data.SortSLOServiceNameURL }}"
+                hx-target="#slo-list"
+                hx-swap="innerHTML show:window:top">
+            Service {{.Data.SortSLOServiceNameTitleIcon}}</th>
+        {{ end }}
+        <th scope="col">
+            <div
+                hx-get="{{ .Data.SortSLOCurrentlyBurningURL }}"
+                hx-target="#slo-list"
+                hx-swap="innerHTML show:window:top">
+            Burning budget {{.Data.SortSLOCurrentlyBurningTitleIcon}}</th>
+        <th scope="col">
+            <div
+                hx-get="{{ .Data.SortSLOBudgetRemainingWindowPeriodURL }}"
+                hx-target="#slo-list"
+                hx-swap="innerHTML show:window:top">
+            Remaining budget (Window) {{.Data.SortSLOBudgetRemainingWindowPeriodTitleIcon}}</th>
+        <th scope="col">
+            <div
+                hx-get="{{ .Data.SortSLOAlertSeverityURL }}"
+                hx-target="#slo-list"
+                hx-swap="innerHTML show:window:top">
+            Alerts {{.Data.SortSLOAlertSeverityTitleIcon}}</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Data.SLOs}}
+        <tr>
+        {{ if .CriticalAlertName }}
+        <td class="is-critical">
+        {{ else if .WarningAlertName }}
+        <td class="is-warning">
+        {{ else }}
+        <td>
+        {{ end }}
+            {{ if .IsGrouped }}
+                <span data-tooltip="Grouped SLO"><i data-lucide="group"></i></span>
+            {{ else }}
+                <span data-tooltip="Individual SLO"><i data-lucide="goal"></i></span>
+            {{ end }}
+        </td>
+        <td>
+            <a href="{{.DetailsURL}}">{{.Name}}</a>
+        </td>
+        <td>
+            {{ if .GroupLabels }}
+            <div>
+                {{- range $key, $value := .GroupLabels -}}
+                    <small><mark>{{ $key }}=<strong>{{ $value }}</strong></mark></small>
+                    <span> </span>
+                {{- end -}}
+            </div>
+            {{ end }}
+        </td>
+        {{ if not $.Data.FilterServiceID }}
+        <td><a href="{{.ServiceURL}}">{{.ServiceID}}</a></td>
+        {{ end }}
+        <td>
+            <span class="percent-badge {{.BurningBudgetPercent | percentUpColorCSSClass}}">{{.BurningBudgetPercent | prettyPercent}} </span>
+        </td>
+        <td style="text-align: right;">
+            <span class="{{.RemainingBudgetWindowPercent | percentDownColorCSSClass}}">{{.RemainingBudgetWindowPercent | prettyPercent}}</span>
+            <span class="percent-bar {{.RemainingBudgetWindowPercent | percentDownColorCSSClass}}">{{ percentBarSVG .RemainingBudgetWindowPercent }}</span>
+        </td>
+        <td>
+        {{ if .CriticalAlertName }}
+        <div class="is-critical">Critical</div>
+        {{ else if .WarningAlertName }}
+        <div class="is-warning">Warning</div>
+        {{ else }}
+        <div>-</div>
+        {{ end }}
+        </td>
+        </tr>
+        {{end}}
+    </tbody>
+
+         <tfoot>
+        <tr>
+            <td colspan="6">
+                <div class="pagination grid">
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <a {{ if not .Data.SLOPagination.HasPrevious }}aria-disabled="true"{{ end }}
+                       href="{{ .Data.SLOPagination.PrevURL }}"
+                       hx-get="{{ .Data.SLOPagination.PrevURL }}"
+                       hx-target="#slo-list"
+                       hx-swap="innerHTML show:window:top">
+                    << Previous
+                    </a>
+                    <a {{ if not .Data.SLOPagination.HasNext }}aria-disabled="true"{{ end }}
+                       href="{{ .Data.SLOPagination.NextURL }}"
+                       hx-get="{{ .Data.SLOPagination.NextURL }}"
+                       hx-target="#slo-list"
+                       hx-swap="innerHTML show:window:top">
+                    Next >>
+                    </a>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                </div>
+            </td>
+        </tr>
+    </tfoot>
+    </table>
+{{ end }}
+</div>
+{{ end }}

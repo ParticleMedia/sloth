@@ -12,19 +12,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/oklog/run"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	monitoringclientset "github.com/prometheus-operator/prometheus-operator/pkg/client/versioned"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	prometheusmodel "github.com/prometheus/common/model"
 	"github.com/slok/reload"
 	koopercontroller "github.com/spotahome/kooper/v2/controller"
 	kooperlog "github.com/spotahome/kooper/v2/log"
 	kooperprometheus "github.com/spotahome/kooper/v2/metrics/prometheus"
-	"gopkg.in/alecthomas/kingpin.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Init all available Kube client auth systems.
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -33,9 +33,16 @@ import (
 	"github.com/slok/sloth/internal/alert"
 	"github.com/slok/sloth/internal/app/generate"
 	"github.com/slok/sloth/internal/app/kubecontroller"
-	"github.com/slok/sloth/internal/k8sprometheus"
 	"github.com/slok/sloth/internal/log"
-	"github.com/slok/sloth/internal/prometheus"
+	"github.com/slok/sloth/internal/plugin"
+	k8stransformpromopv1 "github.com/slok/sloth/internal/plugin/k8stransform/prom_operator_prometheus_rule_v1"
+	pluginenginesk8stransform "github.com/slok/sloth/internal/pluginengine/k8stransform"
+	pluginenginesli "github.com/slok/sloth/internal/pluginengine/sli"
+	pluginengineslo "github.com/slok/sloth/internal/pluginengine/slo"
+	storagefs "github.com/slok/sloth/internal/storage/fs"
+	storageio "github.com/slok/sloth/internal/storage/io"
+	storagek8s "github.com/slok/sloth/internal/storage/k8s"
+	"github.com/slok/sloth/pkg/common/model"
 	slothv1 "github.com/slok/sloth/pkg/kubernetes/api/sloth/v1"
 	slothclientset "github.com/slok/sloth/pkg/kubernetes/gen/clientset/versioned"
 )
@@ -52,23 +59,25 @@ const (
 )
 
 type kubeControllerCommand struct {
-	extraLabels           map[string]string
-	workers               int
-	kubeConfig            string
-	kubeContext           string
-	resyncInterval        time.Duration
-	namespace             string
-	labelSelector         string
-	kubeLocal             bool
-	runMode               string
-	metricsPath           string
-	hotReloadPath         string
-	hotReloadAddr         string
-	metricsListenAddr     string
-	sliPluginsPaths       []string
-	sloPeriodWindowsPath  string
-	sloPeriod             string
-	disableOptimizedRules bool
+	extraLabels              map[string]string
+	workers                  int
+	kubeConfig               string
+	kubeContext              string
+	resyncInterval           time.Duration
+	namespace                string
+	labelSelector            string
+	kubeLocal                bool
+	runMode                  string
+	metricsPath              string
+	hotReloadPath            string
+	hotReloadAddr            string
+	metricsListenAddr        string
+	pluginsPaths             []string
+	sloPeriodWindowsPath     string
+	sloPeriod                string
+	sloPlugins               []string
+	disableDefaultSLOPlugins bool
+	k8sTransformPluginID     string
 }
 
 // NewKubeControllerCommand returns the Kubernetes controller command.
@@ -92,10 +101,12 @@ func NewKubeControllerCommand(app *kingpin.Application) Command {
 	cmd.Flag("hot-reload-addr", "The listen address for hot-reloading components that allow it.").Default(":8082").StringVar(&c.hotReloadAddr)
 	cmd.Flag("hot-reload-path", "The webhook path for hot-reloading components that allow it.").Default("/-/reload").StringVar(&c.hotReloadPath)
 	cmd.Flag("extra-labels", "Extra labels that will be added to all the generated Prometheus rules ('key=value' form, can be repeated).").Short('l').StringMapVar(&c.extraLabels)
-	cmd.Flag("sli-plugins-path", "The path to SLI plugins (can be repeated), if not set it disable plugins support.").Short('p').StringsVar(&c.sliPluginsPaths)
+	cmd.Flag("plugins-path", "The path to SLI and SLO plugins (can be repeated).").Short('p').StringsVar(&c.pluginsPaths)
 	cmd.Flag("slo-period-windows-path", "The directory path to custom SLO period windows catalog (replaces default ones).").StringVar(&c.sloPeriodWindowsPath)
 	cmd.Flag("default-slo-period", "The default SLO period windows to be used for the SLOs.").Default("30d").StringVar(&c.sloPeriod)
-	cmd.Flag("disable-optimized-rules", "If enabled it will disable optimized generated rules.").BoolVar(&c.disableOptimizedRules)
+	cmd.Flag("slo-plugins", `SLO plugins chain declaration in JSON format '{"id": "foo","priority": 0,"config": "{}"}' (Can be repeated).`).Short('s').StringsVar(&c.sloPlugins)
+	cmd.Flag("disable-default-slo-plugins", `Disables the default SLO plugins, normally used along with custom SLO plugins to fully customize Sloth behavior`).BoolVar(&c.disableDefaultSLOPlugins)
+	cmd.Flag("k8s-transform-plugin-id", "The ID of the plugin that will transform generated SLOs into k8s objects.").Default(k8stransformpromopv1.PluginID).StringVar(&c.k8sTransformPluginID)
 
 	return c
 }
@@ -112,9 +123,15 @@ func (k kubeControllerCommand) Run(ctx context.Context, config RootConfig) error
 	sloPeriod := time.Duration(sp)
 
 	// Plugins.
-	pluginRepo, err := createPluginLoader(ctx, logger, k.sliPluginsPaths)
+	pluginsRepo, err := createPluginLoader(ctx, logger, k.pluginsPaths)
 	if err != nil {
 		return err
+	}
+
+	// Load SLO plugin declarations at CMD level.
+	cmdLevelSLOPlugins, err := mapCmdPluginToModel(ctx, k.sloPlugins)
+	if err != nil {
+		return fmt.Errorf("could not load slo plugin declarations: %w", err)
 	}
 
 	// Windows repository.
@@ -137,14 +154,14 @@ func (k kubeControllerCommand) Run(ctx context.Context, config RootConfig) error
 	}
 
 	// Kubernetes services.
-	ksvc, err := k.newKubernetesService(ctx, config)
+	kuberepo, err := k.newKubernetesService(ctx, config, pluginsRepo)
 	if err != nil {
 		return fmt.Errorf("could not create Kubernetes service: %w", err)
 	}
 
 	// Check we can get Sloth CRs without problem before starting everything. This is a hard
 	// dependency, if we can't, we must fail.
-	_, err = ksvc.ListPrometheusServiceLevels(ctx, k.namespace, metav1.ListOptions{})
+	_, err = kuberepo.ListPrometheusServiceLevels(ctx, k.namespace, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("check for PrometheusServiceLevel CRD failed: could not list: %w", err)
 	}
@@ -158,7 +175,7 @@ func (k kubeControllerCommand) Run(ctx context.Context, config RootConfig) error
 	{
 		// Set SLI plugin repository reloader.
 		reloadManager.Add(1000, reload.ReloaderFunc(func(ctx context.Context, id string) error {
-			return pluginRepo.Reload(ctx)
+			return pluginsRepo.Reload(ctx)
 		}))
 
 		ctx, cancel := context.WithCancel(ctx)
@@ -298,34 +315,36 @@ func (k kubeControllerCommand) Run(ctx context.Context, config RootConfig) error
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		// Disable optimized rules.
-		sliRuleGen := prometheus.OptimizedSLIRecordingRulesGenerator
-		if k.disableOptimizedRules {
-			sliRuleGen = prometheus.SLIRecordingRulesGenerator
+		defSLOPlugins := []generate.SLOProcessor{}
+		if !k.disableDefaultSLOPlugins {
+			defSLOPlugins, err = createDefaultSLOPlugins(logger, false, false)
+			if err != nil {
+				return fmt.Errorf("could not create default SLO plugins: %w", err)
+			}
 		}
 
 		// Create the generate app service (the one that the CLIs use).
 		generator, err := generate.NewService(generate.ServiceConfig{
-			AlertGenerator:              alert.NewGenerator(windowsRepo),
-			SLIRecordingRulesGenerator:  sliRuleGen,
-			MetaRecordingRulesGenerator: prometheus.MetadataRecordingRulesGenerator,
-			SLOAlertRulesGenerator:      prometheus.SLOAlertRulesGenerator,
-			Logger:                      generatorLogger{Logger: logger},
+			AlertGenerator:  alert.NewGenerator(windowsRepo),
+			DefaultPlugins:  defSLOPlugins,
+			SLOPluginGetter: pluginsRepo,
+			ExtraPlugins:    cmdLevelSLOPlugins,
+			Logger:          generatorLogger{Logger: logger},
 		})
 		if err != nil {
 			return fmt.Errorf("could not create Prometheus rules generator: %w", err)
 		}
 
 		// Create handler.
-		config := kubecontroller.HandlerConfig{
+		controllerConfig := kubecontroller.HandlerConfig{
 			Generator:        generator,
-			SpecLoader:       k8sprometheus.NewCRSpecLoader(pluginRepo, sloPeriod),
-			Repository:       k8sprometheus.NewPrometheusOperatorCRDRepo(ksvc, logger),
-			KubeStatusStorer: ksvc,
+			SpecLoader:       storageio.NewK8sSlothPrometheusCRSpecLoader(pluginsRepo, sloPeriod),
+			Repository:       kuberepo,
+			KubeStatusStorer: kuberepo,
 			ExtraLabels:      k.extraLabels,
 			Logger:           logger,
 		}
-		handler, err := kubecontroller.NewHandler(config)
+		handler, err := kubecontroller.NewHandler(controllerConfig)
 		if err != nil {
 			return fmt.Errorf("could not create controller handler: %w", err)
 		}
@@ -336,7 +355,7 @@ func (k kubeControllerCommand) Run(ctx context.Context, config RootConfig) error
 			return fmt.Errorf("invalid label selector %q: %w", k.labelSelector, err)
 		}
 
-		ret := kubecontroller.NewPrometheusServiceLevelsRetriver(k.namespace, lSelector, ksvc)
+		ret := kubecontroller.NewPrometheusServiceLevelsRetriver(k.namespace, lSelector, kuberepo)
 
 		ctrl, err := koopercontroller.New(&koopercontroller.Config{
 			Handler:              handler,
@@ -372,16 +391,26 @@ func (k kubeControllerCommand) Run(ctx context.Context, config RootConfig) error
 type kubernetesService interface {
 	ListPrometheusServiceLevels(ctx context.Context, ns string, opts metav1.ListOptions) (*slothv1.PrometheusServiceLevelList, error)
 	WatchPrometheusServiceLevels(ctx context.Context, ns string, opts metav1.ListOptions) (watch.Interface, error)
-	EnsurePrometheusRule(ctx context.Context, pr *monitoringv1.PrometheusRule) error
 	EnsurePrometheusServiceLevelStatus(ctx context.Context, slo *slothv1.PrometheusServiceLevel, err error) error
+	StoreSLOs(ctx context.Context, kmeta model.K8sMeta, slos model.PromSLOGroupResult) error
 }
 
-func (k kubeControllerCommand) newKubernetesService(ctx context.Context, config RootConfig) (kubernetesService, error) {
+func (k kubeControllerCommand) newKubernetesService(ctx context.Context, config RootConfig, pluginsRepo *storagefs.FilePluginRepo) (kubernetesService, error) {
 	config.Logger.Infof("Loading Kubernetes configuration...")
+
+	// Get k8s transform plugin.
+	pluginFact, err := pluginsRepo.GetK8sTransformPlugin(ctx, k.k8sTransformPluginID)
+	if err != nil {
+		return nil, fmt.Errorf("could not get k8s transform plugin %q: %w", k.k8sTransformPluginID, err)
+	}
+	plugin, err := pluginFact.PluginK8sTransformV1()
+	if err != nil {
+		return nil, fmt.Errorf("could not create k8s transform plugin %q: %w", k.k8sTransformPluginID, err)
+	}
 
 	// Fake mode.
 	if k.runMode == controllerModeFake {
-		return k8sprometheus.NewKubernetesServiceFake(config.Logger), nil
+		return storagek8s.NewFakeApiserverRepository(config.Logger, plugin)
 	}
 
 	// Load Kubernetes clients.
@@ -395,22 +424,38 @@ func (k kubeControllerCommand) newKubernetesService(ctx context.Context, config 
 		return nil, fmt.Errorf("could not create Kubernetes sloth client: %w", err)
 	}
 
-	kubeMonitoringCli, err := monitoringclientset.NewForConfig(kubeCfg)
+	// Get required clients.
+	dynamicCli, err := dynamic.NewForConfig(kubeCfg)
 	if err != nil {
-		return nil, fmt.Errorf("could not create Kubernetes monitoring (prometheus-operator) client: %w", err)
+		return nil, fmt.Errorf("could not create Kubernetes dynamic client: %w", err)
+	}
+	discoveryCli, err := discovery.NewDiscoveryClientForConfig(kubeCfg)
+	if err != nil {
+		return nil, fmt.Errorf("could not create Kubernetes discovery client: %w", err)
+	}
+
+	apiserverRepoConfig := storagek8s.ApiserverRepositoryConfig{
+		SlothCli:           kubeSlothcli,
+		Logger:             config.Logger,
+		DynamicCli:         dynamicCli,
+		DiscoveryCli:       discoveryCli,
+		K8sTransformPlugin: plugin,
 	}
 
 	// Create Kubernetes service.
-	ksvc := k8sprometheus.NewKubernetesService(kubeSlothcli, kubeMonitoringCli, config.Logger)
+	kuberepo, err := storagek8s.NewApiserverRepository(apiserverRepoConfig)
+	if err != nil {
+		return nil, fmt.Errorf("could not create Kubernetes API server repository: %w", err)
+	}
 
 	// Dry run mode.
 	if k.runMode == controllerModeDryRun {
 		config.Logger.Warningf("Kubernetes in dry run mode")
-		return k8sprometheus.NewKubernetesServiceDryRun(ksvc, config.Logger), nil
+		return storagek8s.NewDryRunApiserverRepository(*kuberepo, config.Logger), nil
 	}
 
 	// Default mode.
-	return ksvc, nil
+	return kuberepo, nil
 }
 
 // loadKubernetesConfig loads kubernetes configuration based on flags.
@@ -472,4 +517,21 @@ func (g generatorLogger) WithValues(values map[string]interface{}) log.Logger {
 }
 func (g generatorLogger) WithCtxValues(ctx context.Context) log.Logger {
 	return generatorLogger{Logger: g.Logger.WithCtxValues(ctx)}
+}
+
+func createPluginLoader(ctx context.Context, logger log.Logger, paths []string) (*storagefs.FilePluginRepo, error) {
+	fss := []fs.FS{
+		plugin.EmbeddedDefaultSLOPlugins,
+		plugin.EmbeddedDefaultK8sTransformPlugins,
+	}
+	for _, p := range paths {
+		fss = append(fss, os.DirFS(p))
+	}
+
+	pluginsRepo, err := storagefs.NewFilePluginRepo(logger, false, pluginenginesli.PluginLoader, pluginengineslo.PluginLoader, pluginenginesk8stransform.PluginLoader, fss...)
+	if err != nil {
+		return nil, fmt.Errorf("could not create file SLO and SLI plugins repository: %w", err)
+	}
+
+	return pluginsRepo, nil
 }
